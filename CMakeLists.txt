@@ -11,10 +11,10 @@ FetchContent_Declare(juce
     GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(juce)
 
-# JUCE fills the Unicode VST3 class name byte by byte from JucePlugin_Name, so a Cyrillic name
-# would arrive in the host as mojibake: write the real name (Source/UbvName.h) there instead.
+# VST3 names: JUCE widens the 8-bit name byte by byte, and on Windows JucePlugin_Name is ASCII;
+# the patch writes the real name (Source/UbvName.h) everywhere a host reads it.
 include(cmake/patch_juce.cmake)
-ubv_patch_juce("${juce_SOURCE_DIR}")
+ubv_patch_juce("${juce_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/Source/UbvName.h")
 
 # Display name: Cyrillic where the toolchain is UTF-8 throughout (macOS: AU name in Info.plist);
 # on Windows an ASCII JucePlugin_Name, the VST3 Unicode name comes from the patch above.
