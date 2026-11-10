@@ -1,0 +1,88 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    env:
+      OUT: build/Ubervysekatel_artefacts/Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure (macOS, universal)
+        if: runner.os == 'macOS'
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Sign ad-hoc and pack (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep --sign - "$OUT/VST3/Ubervysekatel.vst3"
+          codesign --force --deep --sign - "$OUT/AU/Ubervysekatel.component"
+          mkdir dist
+          ditto -c -k --keepParent "$OUT/VST3/Ubervysekatel.vst3" dist/Ubervysekatel-mac-VST3.zip
+          ditto -c -k --keepParent "$OUT/AU/Ubervysekatel.component" dist/Ubervysekatel-mac-AU.zip
+
+      - name: Upload (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubervysekatel-windows-VST3
+          path: ${{ env.OUT }}/VST3/
+
+      - name: Upload (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubervysekatel-macos
+          path: dist/
+
+      # pluginval: loads the plugin like a host and stresses it (parameters, state, buses, editor)
+      - name: pluginval (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pv.zip
+          Expand-Archive pv.zip -DestinationPath pv
+          ./pv/pluginval.exe --strictness-level 5 --validate-in-process --output-dir pvlog --validate "$env:OUT/VST3/Ubervysekatel.vst3"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: pluginval + auval (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pv.zip -d pv
+          pv/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate-in-process --output-dir pvlog --validate "$OUT/VST3/Ubervysekatel.vst3"
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$OUT/AU/Ubervysekatel.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aufx Ubvk Insi
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ matrix.name }}
+          path: pvlog/
+          if-no-files-found: ignore

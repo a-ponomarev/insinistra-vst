@@ -1,0 +1,5 @@
+#pragma once
+
+// Display name in UTF-8, as escaped bytes so no compiler or build tool can mangle the encoding.
+// "УБЕРВЫСЕКАТЕЛЬ"
+#define UBV_DISPLAY_NAME "\xD0\xA3\xD0\x91\xD0\x95\xD0\xA0\xD0\x92\xD0\xAB\xD0\xA1\xD0\x95\xD0\x9A\xD0\x90\xD0\xA2\xD0\x95\xD0\x9B\xD0\xAC"
