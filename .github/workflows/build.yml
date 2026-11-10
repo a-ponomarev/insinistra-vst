@@ -49,7 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Ubervysekatel-windows-VST3
-          path: ${{ env.OUT }}/VST3/
+          path: ${{ env.OUT }}/VST3/Ubervysekatel.vst3/
 
       - name: Upload (macOS)
         if: runner.os == 'macOS'
@@ -65,8 +65,11 @@ jobs:
         run: |
           Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pv.zip
           Expand-Archive pv.zip -DestinationPath pv
-          ./pv/pluginval.exe --strictness-level 5 --validate-in-process --output-dir pvlog --validate "$env:OUT/VST3/Ubervysekatel.vst3"
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # pluginval.exe is a GUI-subsystem app: PowerShell does not wait for it, so wait explicitly
+          $p = Start-Process ./pv/pluginval.exe -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '--strictness-level', '5', '--validate-in-process', '--output-dir', 'pvlog',
+            '--validate', "$env:OUT/VST3/Ubervysekatel.vst3")
+          if ($p.ExitCode -ne 0) { Write-Error "pluginval exit code $($p.ExitCode)"; exit 1 }
 
       - name: pluginval + auval (macOS)
         if: runner.os == 'macOS'
